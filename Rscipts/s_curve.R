@@ -20,29 +20,26 @@ transcripts$log_rpkm <- log(transcripts$rpkm_cds)
 # Implement S-Curve model on longest CCDS transcripts
 transcripts.can <- transcripts[which(transcripts$CCDS == 'Y'),]
 transcripts.can <- transcripts.can[order(transcripts.can$length_cds, transcripts.can$length_tr, decreasing=TRUE),] 
-all_genes <- as.vector(unique(transcripts.can$gene))
+
+
+# USe the cononical/longest CCDS to estimate the threshold
 CCDS <- character()
-for (i in 1:length(all_genes)) {
-	CCDS[i] <- as.vector(transcripts.can[which(transcripts.can$gene == all_genes[i]),]$transcript)[1]
+
+# if no CCDS information is available use the longest CCDS
+if (nrow(transcripts.can) < 50) {
+    all_genes <- as.vector(unique(transcripts$gene))
+    for (i in 1:length(all_genes)) {
+	    gene_tr <- transcripts[which(transcripts$gene == all_genes[i]),]
+        CCDS[i] <- as.vector(gene_tr[order(gene_tr$length_cds, gene_tr$length_tr, decreasing=TRUE),]$transcript)[1]
+    }
+} else {
+    all_genes <- as.vector(unique(transcripts.can$gene))
+    for (i in 1:length(all_genes)) {
+	    CCDS[i] <- as.vector(transcripts.can[which(transcripts.can$gene == all_genes[i]),]$transcript)[1]
+    }
 }
 
-transcripts.scurve <- transcripts.can[which(transcripts.can$transcript %in% CCDS),]
-
-# check if there are enough data points to estimant  s curve thresholds.
-if (nrow(transcripts.scurve) <= 50) {
-
-    cat("Not enough data points to generate S curve estimated thresholds default values will be used ", "", sep="", "\n")
-
-    MINCOV_default <- 0.1
-    MINRPKM_default <- 3
-    cat("CDS coverage threshold ", MINCOV_default, sep="", "\n")
-    cat("CDS read density threshold ", MINRPKM_default, sep="", "\n")
-
-    thresholds_default <- data.frame(coverage_cds = MINCOV_default, rpkm_cds = MINRPKM_default)
-    write.table(thresholds_default, file=thresholds_file, sep = "\t",col.names=T,row.names=F, quote = FALSE)
-    stop()
-}
-
+transcripts.scurve <- transcripts[which(transcripts$transcript %in% CCDS),]
 
 # fit parameter logistic Sigmoid curve model
 # A lower horizontal asymptote (minimum)
@@ -71,11 +68,14 @@ MINRPKM <- round(X_bend_lower, digits=4)
 MINCOV <- predict(S.Model, newdata = data.frame(log_rpkm = X_bend_lower))[1]
 MINCOV <- round(MINCOV, digits=4)
 
-pdf(file=scurve_file, useDingbats=FALSE)
-plot(transcripts.scurve$log_rpkm,transcripts.scurve$coverage_cds, main=paste(paste("Coverage",MINCOV, sep=" = "),paste("log RPKM",MINRPKM, sep=" = "), sep=",  "), ylab="RPF Coverage", xlab="Read Density [log RPKM]" )
-points(transcripts.scurve$log_rpkm,predict(S.Model), col='red')
-abline(h=MINCOV, col="blue")
-abline(v=MINRPKM, col="blue")
+ax <- 2.5
+pdf(file=scurve_file, width=10, useDingbats=FALSE)
+mar.default = c(5, 4, 4, 2) + 0.1
+par(mar=mar.default + c(0,3,0,0)) 
+plot(transcripts.scurve$log_rpkm,transcripts.scurve$coverage_cds, main=paste(paste("Coverage",MINCOV, sep=" = "),paste("log RPKM",MINRPKM, sep=" = "), sep=",  "), ylab="RPF Coverage", xlab="Read Density [log RPKM]", cex.lab = ax, cex.axis=ax )
+points(transcripts.scurve$log_rpkm,predict(S.Model), col='red', cex=1)
+abline(h=MINCOV, col="blue", lwd=1.5)
+abline(v=MINRPKM, col="blue", lwd=1.5)
 invisible(dev.off())
 
 MINRPKM <- exp(MINRPKM)

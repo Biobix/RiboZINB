@@ -2,9 +2,7 @@
 
 use strict;
 use warnings;
-use diagnostics;
 
-use DBI;
 use Getopt::Long;
 use POSIX;
 use Parallel::ForkManager;
@@ -19,8 +17,6 @@ use Cwd 'abs_path';
 
 my $startRun = time();
 
-my $pause_site_prop = 0.7;  #proportion of reads at one position to consider are pause site
-
 my $default_score = "Y";# Use default score threshold [0.1] or estimate threshold by permutation test.
 my $cutoff = 0.1;        # Default score threshold to determine expressed isoform(s)
 my $MINCOUNT = 5;		# minimum reads count
@@ -34,7 +30,6 @@ my $mapped_total;		# total mappable reads
 my $cores = 1;		    # number of threads
 my $no_of_samples = 30;# number of iterations when generating negative set
 my $fdr = 0.05;		    # FDR percentage
-my $fdr_type = "g";     # Global of local (PEP) FDR. takes either global (default = g) or local (l)
 my $alpha = 1;
 
 
@@ -59,7 +54,6 @@ GetOptions(
 	'n=i'=> \$no_of_samples,
 	's=s'=> \$script_dir,
 	'f=f'=> \$fdr,
-    'ft=s'=>\$fdr_type,
     'v=f'=> \$cutoff,
 	'dt=s'=> \$default_score,
     'a=f'=>\$alpha,
@@ -104,11 +98,11 @@ if ($exp_name) {
 	$exp_name = "riboZinB_pred_";
 }
 
-if ($work_dir) {
+#if ($work_dir) {
 	my $full_path = abs_path($work_dir);
 	printf("%-".$space_len."s", "Working directory",);
 	print ":$full_path\n";
-} 
+#} 
 
 if ($ribo) {
 	if (-e $ribo) {
@@ -139,28 +133,14 @@ if ($gtf) {
 }
 
 
-#####################################################
-# CHECK IF INPUT VARIABLES ARE PROPERLY INITIALIZE ##
-#####################################################
+printf("%-".$space_len."s", "File containing RPF counts per genomic position");
+print ":$full_path\n";
+
 
 #$default_score = "Y";# Use default score threshold [0.1] or estimate threshold by permutation test.
 $default_score=uc($default_score);
 
 
-#$cutoff = 0.1;        # Default score threshold to determine expressed isoform(s)
-#$MINCOUNT = 5;		# minimum reads count
-#$force = "N";		# Y to delete tmp folder if it exist
-#$mapped_total;		# total mappable reads
-#$cores = 1;		    # number of threads
-#$no_of_samples = 100;# number of iterations when generating negative set
-#$fdr = 0.05;		    # FDR percentage
-#$fdr_type = "g";     # Global of local (PEP) FDR. takes either global (default = g) or local (l)
-
-
-#####################################################
-#####################################################
-
-# Error Handling: check if all require files are in the script directory
 if ($script_dir) {
 	if (-d $script_dir) {
 
@@ -177,14 +157,17 @@ if ($script_dir) {
 			print "Script 'merge.R' not found in script directory.\nEnsure the directory '$script_dir' contains all required file (see readme).\n";
 			exit(1);
 		}
+
 		unless (-e $script_dir."/FDR.R") {
 			print "Script 'FDR.R' not found in script directory.\nEnsure the script directory '$script_dir' contains all required file (see readme).\n";
 			exit(1);
 		}
+
 		unless (-e $script_dir."/s_curve.R") {
 			print "Script 's_curve.R' not found in script directory.\nEnsure the script directory '$script_dir' contains all required file (see readme).\n";
 			exit(1);
 		}
+
 	} else { 
 		print "Script directory '$script_dir' does NOT exist!\n";
 		exit;
@@ -193,6 +176,7 @@ if ($script_dir) {
 	print "Please do not forget to pass the scripts directory!\n";
 	exit;
 }
+
 
 printf("%-".$space_len."s", "Total number of mappable reads",);
 print ":$mapped_total\n";
@@ -214,23 +198,11 @@ if (uc($default_score) eq 'Y') {
     printf("%-".$space_len."s", "False discovery rate used",);
     print ":$fdr\n";
 
-    if (lc($fdr_type) eq 'g') {
-
-        printf("%-".$space_len."s", "FDR type",);
-        print ":global\n";
-
-        printf("%-".$space_len."s", "Number of iterations to generate negative distribution",);
-        print ":$no_of_samples\n";
-
-    } else {
-
-        printf("%-".$space_len."s", "FDR type",);
-        print ":local\n";
-
-        printf("%-".$space_len."s", "Number of permutations to calculate local fdr",);
-        print ":$no_of_samples\n";
-    }
 }
+
+
+printf("%-".$space_len."s", "Number of iterations to generate negative set ",);
+print ":$no_of_samples\n";
 
 printf("%-".$space_len."s", "Proportion of noise to generate negative set ",);
 print ":$alpha\n";
@@ -269,7 +241,7 @@ gene_info($valid_genes,$gene_file);
 transcript_info($transcripts_valid,$transcript_info_file);
 
 
-# Use SCurve technique to estimate minimum read demsity and coverage threshold
+# use S curve to find cutoffs
 $msg = "\tGenerating S curve thresholds.";
 print_localtime($msg);
 my $scurve_cmd = "Rscript $script_dir"."/s_curve.R $transcript_info_file $threshold $scurve";
@@ -291,10 +263,12 @@ print "\n\n";
 # Estimate FDR and select expressed Isoforms
 $msg = "\tIdentifing expressed isoform(s) at $fdr FDR threshold";
 print_localtime($msg);
-system("Rscript $script_dir"."/merge.R $file_dir $isoform result");
+
+my $merge_cmd = "Rscript $script_dir"."/merge.R $file_dir $isoform result";
+print "\n$merge_cmd\n";
+system($merge_cmd);
 
 
-$fdr_type = lc($fdr_type);
 $default_score = lc($default_score);
 my $prefix = $work_dir."/".$exp_name."Ribo";
 my $command_comp = "Rscript $script_dir"."/FDR.R ".$fdr." ".$cutoff." ".$default_score." ".$isoform." ".$prefix;
@@ -314,12 +288,11 @@ timer($startRun);
 
 
 sub ZINB_parallel {
-	#sub to run parellel Zeroinflated negative binomial model
 	my $pm = Parallel::ForkManager->new($cores);
 	opendir(DIRECTORY, $file_dir) or die $!;
 	while (my $file = readdir(DIRECTORY)) {
-		
-		my $pid = $pm->start and next;	# process id
+		#next if ($file =~ /_pos/);
+		my $pid = $pm->start and next;	# parallel process access to split directory
 		unless ($file=~/^\./){
 			my $file_in = path($file, $file_dir);
 			system("Rscript $script_dir"."/RiboZINB.R ".$tmp_dir." ".$file_in." ".$file_in."_zinb ".$threshold." ".$no_of_samples." ".$alpha." ".$default_score);
@@ -336,7 +309,7 @@ sub split_genes_file {
 	my $transcripts = $_[0];
 
 	my $number_gene = scalar(keys %$transcripts);
-	my $genes_per_file = int(($number_gene/$cores) + 0.5);	# total number of genes in each file
+	my $genes_per_file = int(($number_gene/$cores) + 0.5);	# number of genes in each file
 	my $fcount = 1;		# Count number of files
 	my $countgenes = 1;		# Exit count
 
@@ -413,7 +386,6 @@ sub gene_info {
 	my $genes  = $_[0];
 	my $filename = $_[1];
 
-	# create and write file with expressed gene information
 	open F, ">".$filename or die $!;
 	print F "gene\tgene_name\tchromosome\tstrand\tstart\tstop\tbiotype\treads\trpkm\tRPF_pos\tno_of_transcripts\tproportion_of_zero\n";
 	foreach my $gene (sort keys %$genes) {
@@ -449,11 +421,8 @@ sub Isoform_data {
 		my $strand 	= $genes->{$gene}->{strand};
 		my $biotype = $genes->{$gene}->{biotype};
 
-		# for each gene get all exon positions
-		unless ($biotype) {print "$gene\n"; exit} # catch genes without biotype
-		
-		# process only protein coding genes
-		if ($biotype eq 'protein_coding') {	
+		unless ($biotype) {print "$gene\n"; exit}
+		if ($biotype eq 'protein_coding') {
 			my $gene_positions = {};	# hash to store gene positional information
 			foreach my $exon_id (keys %{$genes->{$gene}->{exons}}){
 				my @exon = split '-', $genes->{$gene}->{exons}->{$exon_id};
@@ -466,7 +435,6 @@ sub Isoform_data {
 				}
 			}
 
-			# get proportion of zeros in each gene
 			my $RPF_pos = 0;
 			my $gene_reads = 0;
 			foreach my $p (keys %$gene_positions) {
@@ -474,28 +442,26 @@ sub Isoform_data {
 				$gene_reads += $gene_positions->{$p};
 			}
 
-			# collect information about genes for downstream analysis
+			# collect information about the genes for downstream analysis
 			my @positions = ($strand eq '+') ? sort {$a <=> $b} keys %$gene_positions: sort {$b <=> $a} keys %$gene_positions;
 			my $gene_coverage = $RPF_pos/scalar(@positions);
-            my $gene_rpkm = ($gene_reads*1000000000)/(scalar(@positions)*$mapped_total);	# read density
+            my $gene_rpkm = ($gene_reads*1000000000)/(scalar(@positions)*$mapped_total);
 
 			$genes->{$gene}->{reads} = $gene_reads;
 			$genes->{$gene}->{prop_of_zero} = 1 - $gene_coverage;
 			$genes->{$gene}->{RPF_pos} = $RPF_pos;
 			$genes->{$gene}->{rpkm} = $gene_rpkm;
 
-			# keep only genes with user defined minimum Ribo-sea reqds
+			# to ensure the zeros are inflated in all cases
 			if ($gene_reads >= $MINCOUNT) {
 				my $count_tr = 0;	# count number of valid trnscript per gene 
 				my $tr_hash = {};	# hash to store each transcript genomic positions
 				my @trans = ();	 	# array to keep track of all transcript of the currest gene
 
-				# Collect all genomic positions for each isoform
 				foreach my $tr (sort keys %{$transcripts->{$gene}}) {
 
 					my $tr_biotype = $transcripts->{$gene}->{$tr}->{biotype};
 
-					# only process protein coding/Polymorphic pseudogene transcripts
 					if ($tr_biotype eq 'protein_coding' or $tr_biotype eq 'Polymorphic pseudogene') {
 						my @exons = @{$transcripts->{$gene}->{$tr}->{exons}};
 						my $start_cds = $transcripts->{$gene}->{$tr}->{start_cds};
@@ -503,9 +469,7 @@ sub Isoform_data {
 						unless ($start_cds) {$start_cds = $transcripts->{$gene}->{$tr}->{start}}
 						unless ($stop_cds) {$stop_cds = $transcripts->{$gene}->{$tr}->{stop}}
 
-						# transcript information
 						my ($tr_positions,$tr_reads,$rpkm,$coverage_cds,$rpkm_cds,$length_cds) = transcript_positions(\@exons,$chr,$strand,$start_cds,$stop_cds);
-						
 						$transcripts->{$gene}->{$tr}->{rpkm} = $rpkm;
 						$transcripts->{$gene}->{$tr}->{coverage_cds} = $coverage_cds;
 						$transcripts->{$gene}->{$tr}->{rpkm_cds} = $rpkm_cds;
@@ -513,19 +477,17 @@ sub Isoform_data {
 						$transcripts->{$gene}->{$tr}->{length_cds} = $length_cds;
 						$transcripts->{$gene}->{$tr}->{len} = scalar(keys %{$tr_positions});
 
-						# keep track of all transcript exon positions in tr_hash
+						# keep track of all positions in tr_hash
 						foreach my $p (keys %$tr_positions) {
 							$tr_hash->{$tr}->{$p} = $tr_positions->{$p};
 						}
 						$count_tr++;
-						push @trans, $tr;	# get all transcripts
-						
-						# keep all valid transcripts 
+						push @trans, $tr;	# add transcript into the array
 						$transcripts_valid->{$gene}->{$tr} = $transcripts->{$gene}->{$tr};
 					}
 				}
 
-				# write positional information for each gene and all its transcripts into file				
+				# allow only gene with at least one transcript
                 my $gene_ave_read = ceil($gene_reads/scalar(@positions));
 				my $filename = $tmp_dir."/".$gene.".txt";
 				open F, ">".$filename or die $!;
@@ -548,19 +510,18 @@ sub Isoform_data {
 		}
 	}
 
-	# exit if no gene is in the hash
 	if (scalar(keys %$valid_genes) == 0) {
 		print "No gene found with RPF reads above the minimum of $MINCOUNT reads\n";
 		exit;
 	}
 
 	return ($valid_genes,$transcripts_valid);
+
 }
 
 
 sub transcript_positions {
 
-	# calculate transcript Ribo-seq information
 	my $exons 	 = $_[0];
 	my $chr 	 = $_[1];
 	my $strand 	 = $_[2];
@@ -593,8 +554,8 @@ sub transcript_positions {
 
     $length_cds = $length_cds - 1;
 	my $rpkm = ($reads*1000000000)/(scalar(keys %$tr_positions)*$mapped_total);
-	$rpkm_cds = ($rpkm_cds*1000000000)/($length_cds*$mapped_total);	# transcript read density
-	$coverage_cds = $coverage_cds/$length_cds;	# proportion of transcript covered by Ribo-seq reads
+	$rpkm_cds = ($rpkm_cds*1000000000)/($length_cds*$mapped_total);
+	$coverage_cds = $coverage_cds/$length_cds;
 
 	return $tr_positions,$reads,$rpkm,$coverage_cds,$rpkm_cds,$length_cds;
 
@@ -602,8 +563,6 @@ sub transcript_positions {
 
 
 sub annotation_GTF {
-
-	# parse GTF file
 
 	my $file 	= $_[0];
 
@@ -649,7 +608,8 @@ sub annotation_GTF {
 			my ($tsl) = $info =~ /transcript_support_level."?([^";]+)"?/;
 			unless ($gene_name) {$gene_name = 'na'}
 
-			if ($biotype_tr eq 'protein_coding' or $biotype_tr eq 'Polymorphic pseudogene') {
+			#if ($biotype_tr eq 'protein_coding' or $biotype_tr eq 'Polymorphic pseudogene') {
+			if ($biotype_tr eq 'protein_coding' and exists $genes->{$gene_id}) {
 		 		$transcripts->{$gene_id}->{$tr_id}->{region} = $chr;
 		 		$transcripts->{$gene_id}->{$tr_id}->{gene_name} = $gene_name;
 		 		$transcripts->{$gene_id}->{$tr_id}->{start} = $start;
@@ -670,7 +630,8 @@ sub annotation_GTF {
 			my ($biotype_tr) = $info =~ /transcript_biotype."?([^";]+)"?/;
 			my @exon = ($start,$stop);
 
-			if ($biotype_tr eq 'protein_coding' or $biotype_tr eq 'Polymorphic pseudogene') {
+			#if ($biotype_tr eq 'protein_coding' or $biotype_tr eq 'Polymorphic pseudogene') {
+			if ($biotype_tr eq 'protein_coding' and exists $genes->{$gene_id}) {
  				push @{$transcripts->{$gene_id}->{$tr_id}->{exons}}, \@exon;
 				$genes->{$gene_id}->{exons}->{$exon_id} = $start."-".$stop;
 			}
@@ -681,7 +642,8 @@ sub annotation_GTF {
 			my ($gene_id) = $info =~ /gene_id."?([^";]+)"?/;
 			my ($biotype_tr) = $info =~ /transcript_biotype."?([^";]+)"?/;
 
-			if ($biotype_tr eq 'protein_coding' or $biotype_tr eq 'Polymorphic pseudogene') {
+			#if ($biotype_tr eq 'protein_coding' or $biotype_tr eq 'Polymorphic pseudogene') {
+			if ($biotype_tr eq 'protein_coding' and exists $genes->{$gene_id}) {
 		        if ($strand eq '+') {
 					$transcripts->{$gene_id}->{$tr_id}->{start_cds} = $start;
 		        } else {
@@ -695,7 +657,8 @@ sub annotation_GTF {
 			my ($gene_id) = $info =~ /gene_id."?([^";]+)"?/;
 			my ($biotype_tr) = $info =~ /transcript_biotype."?([^";]+)"?/;
 
-			if ($biotype_tr eq 'protein_coding' or $biotype_tr eq 'Polymorphic pseudogene') {
+			#if ($biotype_tr eq 'protein_coding' or $biotype_tr eq 'Polymorphic pseudogene') {
+			if ($biotype_tr eq 'protein_coding' and exists $genes->{$gene_id}) {
 		        if ($strand eq '+') {
 					$transcripts->{$gene_id}->{$tr_id}->{stop_cds} = $start;
 		        } else {
@@ -717,7 +680,6 @@ sub path {
 
 
 sub get_read_table {
-	# parse Ribo-seq file
 
 	my $file = $_[0];
 	my $read = {};		# hash to store all ribo-seq inofrmation from SQLite DB

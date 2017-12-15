@@ -47,6 +47,8 @@ no_of_samples <- as.numeric(args[5])
 alpha <- as.numeric(args[6])
 
 
+pause_threshold <- 0.6  # pause threshold proportion
+
 # path to data files
 files <- list.files(path=dir)
 path <- paste(dir, "/", sep="")
@@ -78,6 +80,8 @@ transcript.dta$pvalues_count <- vector(length = nrow(transcript.dta))
 transcript.dta$pvalues_zero <- vector(length = nrow(transcript.dta))
 
 
+permutations <- list()
+
 for (t in 1:nrow(transcript.dta)) {
 
 	gene.file <- paste(transcript.dta[t,]$gene,".txt", sep="")
@@ -86,9 +90,17 @@ for (t in 1:nrow(transcript.dta)) {
 
 	j <- which(transcript.dta[t,]$transcript == colnames(gene)) # get column number of transcript at row t
 	tr.df <- data.frame(count=gene[,j], group='0')
-
-    # inflate zero if needed
     count_values <- gene[,1]
+
+    # adjust for spikes/pause sites by replacing positions with reads > 70% with average
+    #average_reads <- round(0.5 + sum(count_values)/length(count_values[count_values > 0]), digits=0)
+    #pause_site_threshold <- pause_threshold*sum(count_values)       # threshold for pause sites
+
+    # replace pause sites with average reads
+    #gene.f$count[gene.f$count >= pause_site_threshold] <- average_reads
+    #tr.df$count[tr.df$count >= pause_site_threshold] <- average_reads
+
+    # inflate zero if needed uninflated zeros occurs mostly within histon genes
     proportion_of_count <- length(count_values[count_values > 0])/length(count_values)
     if (proportion_of_count > 0.5) {
         adjusted_zeros <- round(proportion_of_count*nrow(gene), digits=0)
@@ -112,7 +124,7 @@ for (t in 1:nrow(transcript.dta)) {
         transcript.dta[t,]$rate_ratio <- rate_ratio
         transcript.dta[t,]$odds_ratio <- odds_ratio
 
-		# RPSS score
+		# score
         x <- c(1 - rate_ratio, 1 - odds_ratio)
 		transcript.dta[t,]$score <- sqrt(sum(x^2))
 
@@ -161,7 +173,6 @@ for (t in 1:nrow(transcript.dta)) {
 
         # write permutation estimates to file
         #permutations[[colnames(gene)[j]]] <- score_neg.samp
-
 		transcript.dta[t,]$score_neg <- mean(score_neg.samp, na.rm =T)
         
         rm(rate_ratio)
@@ -180,8 +191,21 @@ for (t in 1:nrow(transcript.dta)) {
         transcript.dta[t,]$odds_ratio <- NA
         transcript.dta[t,]$score_neg <- NA
 	}
+
 }
 
 write.table(transcript.dta, file=paste(result_file, "_result", sep=""), sep = "\t",col.names=T,row.names=F, quote = FALSE)
+
+
+# Write permutation list to file
+#dataset.perm <- c()
+#for (i in 1:length(permutations)) {
+#    row <- c(names(permutations)[i], permutations[[i]])
+#    dataset.perm <- rbind(dataset.perm, row)
+#}
+#dataset.perm <-as.data.frame(dataset.perm)
+#colnames(dataset.perm) <- c("transcript", paste("perm_", c(1:no_of_samples),sep=""))
+#write.table(dataset.perm, file=paste(result_file, "_perm", sep=""), sep="\t", row.names = FALSE, col.names = FALSE, quote = FALSE)
+
 
 

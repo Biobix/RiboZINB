@@ -5,6 +5,7 @@
 ############
 
 suppressMessages(library(ggplot2))
+suppressMessages(library(DMwR))
 
 args <- commandArgs(TRUE)
 fdr <- as.numeric(args[1])

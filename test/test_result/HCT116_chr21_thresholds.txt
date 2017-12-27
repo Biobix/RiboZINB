@@ -1,0 +1,2 @@
+coverage_cds	rpkm_cds
+0.0037	9.43664014537033

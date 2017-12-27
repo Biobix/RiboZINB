@@ -1,0 +1,51 @@
+The following script directory is used                 :/data/elvis/DTU/scripts/RiboZinb/Rscipts
+
+
+Experiment name                                        :HCT-NT_chr21
+Working directory                                      :/data/elvis/DTU/Human/test/test_result
+File containing RPF counts per genomic position        :/data/elvis/DTU/Human/test/positional_data_file.csv
+The GTF annotation file used                           :/data/elvis/DTU/Human/test/chr_21.gtf
+File containing RPF counts per genomic position        :/data/elvis/DTU/Human/test/test_result
+Total number of mappable reads                         :875454
+Minimum read count allowed at the gene level           :5
+Total number of cores used                             :10
+Threshold score used                                   :0.1
+Number of iterations to generate negative set          :30
+Proportion of noise to generate negative set           :1
+
+
+16:41:57	Extracting annotation information from GTF file(s).
+16:41:58	Extracting RPF positional data from file.
+16:41:59	Assembling transcript information
+16:42:15	Generating S curve thresholds.
+
+Rscript /data/elvis/DTU/scripts/RiboZinb/Rscipts/s_curve.R test_result/HCT-NT_chr21_all_transcript.txt test_result/HCT-NT_chr21_thresholds.txt test_result/HCT-NT_chr21_scurve.pdf
+CDS coverage threshold 0.0037
+CDS read density threshold 9.43664
+S curve inflation point (RPKM) 7.97741
+S curve inflation point (coverage) 0.5176877
+
+
+16:42:15	Performing Zeroinflated negative binomial analysis. This might take a while.
+
+
+17:08:24	Identifing expressed isoform(s) at 0.05 FDR threshold
+
+Rscript /data/elvis/DTU/scripts/RiboZinb/Rscipts/merge.R test_result/gene_split test_result/HCT-NT_chr21_transcript_zeroinfl.txt result
+
+Rscript /data/elvis/DTU/scripts/RiboZinb/Rscipts/FDR.R 0.05 0.1 y test_result/HCT-NT_chr21_transcript_zeroinfl.txt test_result/HCT-NT_chr21_Ribo
+
+Total number of genes expressed 120 
+Total number of transcripts 517 
+
+Threshold score 0.1 
+Number of genes below threshold 108 
+Number of trancript below 178 
+Number of genes with single isoform  62 
+Number of genes with multiple isoform 46
+Number of genes without any isoforms below threshold 12
+
+17:08:25	Analysis completed and results written to file.
+
+Total running time: 00:26:28
+

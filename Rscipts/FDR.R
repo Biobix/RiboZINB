@@ -13,7 +13,6 @@ cutoff <- as.numeric(args[2])
 default <- as.character(args[3])
 transcript_file <- as.character(args[4])
 prefix <- as.character(args[5])
-#fdr_type <- as.character(args[6]) 
 
 
 ###---- Data ----###
@@ -74,7 +73,7 @@ for (i in 1:length(selected_genes)) {
 	if (gene_tr == 1) {
 		genes_single[p] <- selected_genes[i]
 		p <- p + 1
-	} else {
+	} else if (gene_tr > 1) {
 		genes_multi[t] <- selected_genes[i]
 		t <- t + 1
 	}
@@ -87,36 +86,9 @@ cat("Number of genes with multiple isoform ", length(genes_multi), sep="", "\n")
 gene_no_tr_below_cutoff <- setdiff(transcripts$gene,transcripts.FDR$gene)
 cat("Number of genes without any isoforms below threshold ", length(gene_no_tr_below_cutoff), sep="", "\n")
 
-if (length(gene_no_tr_below_cutoff) > 0) {
-
-    transcripts.low <- transcripts[which(transcripts$gene %in% gene_no_tr_below_cutoff),]
-    transcripts.low$isoform_above_cutoff <- "N"
-
-    best_isoform <- character()
-    selected_genes <- as.vector(unique(transcripts.low$gene))
-
-    t <- 1
-    for (i in 1:length(selected_genes)) {
-	    tr <- transcripts.low[which(transcripts.low$gene == selected_genes[i]),]
-	    tr_id <- as.vector(tr[which(tr$score == min(tr$score)),]$transcript)
-        if (length(tr_id) > 1) {
-            for (j in 1:length(tr_id)) {
-                best_isoform[t] <- tr_id[j]
-                t <- t + i
-            }
-        } else {
-	        best_isoform[t] <- tr_id[1]
-            t <- t + 1
-        }
-    }
-
-    transcripts.low.sel <- transcripts.low[which(transcripts.low$transcript %in% best_isoform),]
-    #transcripts.FDR <- rbind(transcripts.FDR,transcripts.low.sel)
-}
-
 
 # write outputto file
-composite_merge_file <- paste(prefix,"merged_expressed_isoforms.txt",sep="_")
-write.table(transcripts.FDR, file=composite_merge_file, sep = "\t",col.names=T,row.names=F, quote = FALSE)
+expressed_file <- paste(prefix,"expressed_isoforms.txt",sep="_")
+write.table(transcripts.FDR, file=expressed_file, sep = "\t",col.names=T,row.names=F, quote = FALSE)
 
 

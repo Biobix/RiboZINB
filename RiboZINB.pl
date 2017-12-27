@@ -2,13 +2,16 @@
 
 use strict;
 use warnings;
+use diagnostics;
 
+use DBI;
 use Getopt::Long;
 use POSIX;
 use Parallel::ForkManager;
 use File::Spec;
 use POSIX qw(ceil);
 use Cwd 'abs_path';
+
 
 ########
 # USAGE: perl RiboZINB.pl -p positional_data_file -g gtf_file -e mESC -t tmp_folder -m minimum_reads_allowed -r total_mappable_reads
@@ -17,10 +20,12 @@ use Cwd 'abs_path';
 
 my $startRun = time();
 
+my $pause_site_prop = 0.7;  #proportion of reads at one position to consider are pause site
+
 my $default_score = "Y";# Use default score threshold [0.1] or estimate threshold by permutation test.
 my $cutoff = 0.1;        # Default score threshold to determine expressed isoform(s)
 my $MINCOUNT = 5;		# minimum reads count
-my $force = "N";		# Y to delete tmp folder if it exist
+my $force = "Y";		# Y to delete tmp folder if it exist
 my $exp_name;			# experiment name
 my $work_dir;			# working folder
 my $ribo;				# RIBO-seq derived master SQLite file
@@ -30,7 +35,7 @@ my $mapped_total;		# total mappable reads
 my $cores = 1;		    # number of threads
 my $no_of_samples = 30;# number of iterations when generating negative set
 my $fdr = 0.05;		    # FDR percentage
-my $alpha = 1;
+my $sigma = 1;
 
 
 # Output files
@@ -39,6 +44,11 @@ my $isoform;
 my $scurve;
 my $threshold;
 my $transcript_threshold;
+
+
+# Global variables hardcoded
+my $space_len = 55;		# spaces to format output
+
 
 ##	GET command line arguments
 GetOptions(
@@ -56,7 +66,7 @@ GetOptions(
 	'f=f'=> \$fdr,
     'v=f'=> \$cutoff,
 	'dt=s'=> \$default_score,
-    'a=f'=>\$alpha,
+    'a=f'=>\$sigma,
 
     # Output files
     'tf=s'=>\$transcript_info_file,
@@ -73,22 +83,118 @@ GetOptions(
 my %params = (
 	'p'=> $ribo,
 	'g'=> $gtf,
-	's'=>$script_dir,
+	's'=> $script_dir,
+	'r'=> $mapped_total
 );
 
 
-	#check if para,eters are properly initialized
+#---- check if mandatory parameters are initialized
 my @invalid = grep uninitialized_param($params{$_}), keys %params;	
 die "Mandatory variable(s) not properly initialized: @invalid\n" if @invalid;
 
-# Check working directory
+
+#---- Check working directory
 my $file_dir;
 my $tmp_dir;
 ($work_dir, $file_dir, $tmp_dir) = check_work_dir($work_dir);
 
 
-# print input variables information
-my $space_len = 55;		# spaces to format output
+#---- convert to uppercase
+$default_score=uc($default_score);
+$force=uc($force);
+
+
+#----- Check if input varaibles are properly initialized
+if (_isNumeric($cutoff) == 0 or (_isNumeric($cutoff) == 1 and ($cutoff <= 0 and $cutoff >= 1))) {
+    print "INPUT ERROR: -v is not properly initialized!!!!!!!.\n";
+    print "-v take as input a numeric value in the interval (0, 1).\n";
+    exit(1);
+}
+
+if (_isNumeric($fdr) == 0 or (_isNumeric($fdr) == 1 and ($fdr <= 0 and $fdr >= 1))) {
+    print "INPUT ERROR: -f is not properly initialized!!!!!!!.\n";
+    print "-f take as input a numeric value in the interval (0, 1).\n";
+    exit(1);
+}
+
+if (_isNumeric($MINCOUNT) == 0 or (_isNumeric($MINCOUNT) == 1 and $MINCOUNT < 1)) {
+    print "INPUT ERROR: -m is not properly initialized!!!!!!!.\n";
+    print "-m take as input a number greater than or equal to 1.\n";
+    exit(1);
+}
+
+unless ($force ne "N" or $force ne "Y") {
+    print "INPUT ERROR: -d is not properly initialized!!!!!!!.\n";
+    print "-d take as input either N(n) or Y(y).\n";
+    exit(1);
+}
+
+if (_isNumeric($mapped_total) == 0 or (_isNumeric($mapped_total) == 1 and $mapped_total <= 1)) {
+    print "INPUT ERROR: -r is not properly initialized!!!!!!!.\n";
+    print "-r take as input an integer greater than 1.\n";
+    exit(1);
+}
+
+if (_isNumeric($cores) == 0 or (_isNumeric($cores) == 1 and $cores < 1)) {
+    print "INPUT ERROR: -t is not properly initialized!!!!!!!.\n";
+    print "-t take as input an integer greater than or equal to 1.\n";
+    exit(1);
+}
+
+if (_isNumeric($no_of_samples) == 0 or (_isNumeric($no_of_samples) == 1 and $no_of_samples < 1)) {
+    print "INPUT ERROR: -n is not properly initialized!!!!!!!.\n";
+    print "-n take as input an integer greater than or equal to 1.\n";
+    exit(1);
+}
+
+if (_isNumeric($no_of_samples) == 0 or (_isNumeric($no_of_samples) == 1 and $no_of_samples < 1)) {
+    print "INPUT ERROR: -n is not properly initialized!!!!!!!.\n";
+    print "-n take as input an integer greater than or equal to 1.\n";
+    exit(1);
+}
+
+if (_isNumeric($sigma) == 0 or (_isNumeric($sigma) == 1 and $sigma <= 0)) {
+    print "INPUT ERROR: -a is not properly initialized!!!!!!!.\n";
+    print "-a take as input a numeric value greater than 0.\n";
+    exit(1);
+}
+
+if ($script_dir) {
+	if (-d $script_dir) {
+		my $full_path = abs_path($script_dir);
+		printf("%-".$space_len."s", "The following script directory is used ");
+		print ":$full_path\n";
+
+		unless (-e $script_dir."/RiboZINB.R") {
+			print "Script 'RiboZINB.R' not found in script directory.\nEnsure the directory  '$script_dir' contains all required file (see readme).\n";
+			exit(1);
+		}
+
+		unless (-e $script_dir."/merge.R") {
+			print "Script 'merge.R' not found in script directory.\nEnsure the directory '$script_dir' contains all required file (see readme).\n";
+			exit(1);
+		}
+
+		unless (-e $script_dir."/FDR.R") {
+			print "Script 'FDR.R' not found in script directory.\nEnsure the script directory '$script_dir' contains all required file (see readme).\n";
+			exit(1);
+		}
+
+		unless (-e $script_dir."/s_curve.R") {
+			print "Script 's_curve.R' not found in script directory.\nEnsure the script directory '$script_dir' contains all required file (see readme).\n";
+			exit(1);
+		}
+	} else { 
+		print "Script directory '$script_dir' does NOT exist!\n";
+		exit;
+	}
+} else {
+	print "Please do not forget to pass the scripts directory!\n";
+	exit;
+}
+
+
+#---- print input variables 
 print "\n\n";
 if ($exp_name) {
 	printf("%-".$space_len."s", "Experiment name");
@@ -98,11 +204,9 @@ if ($exp_name) {
 	$exp_name = "riboZinB_pred_";
 }
 
-#if ($work_dir) {
-	my $full_path = abs_path($work_dir);
-	printf("%-".$space_len."s", "Working directory",);
-	print ":$full_path\n";
-#} 
+my $full_path = abs_path($work_dir);
+printf("%-".$space_len."s", "Working directory",);
+print ":$full_path\n";
 
 if ($ribo) {
 	if (-e $ribo) {
@@ -132,50 +236,8 @@ if ($gtf) {
 	exit;
 }
 
-
 printf("%-".$space_len."s", "File containing RPF counts per genomic position");
 print ":$full_path\n";
-
-
-#$default_score = "Y";# Use default score threshold [0.1] or estimate threshold by permutation test.
-$default_score=uc($default_score);
-
-
-if ($script_dir) {
-	if (-d $script_dir) {
-
-		my $full_path = abs_path($script_dir);
-		printf("%-".$space_len."s", "The following script directory is used ");
-		print ":$full_path\n";
-
-		unless (-e $script_dir."/RiboZINB.R") {
-			print "Script 'RiboZINB.R' not found in script directory.\nEnsure the directory  '$script_dir' contains all required file (see readme).\n";
-			exit(1);
-		}
-
-		unless (-e $script_dir."/merge.R") {
-			print "Script 'merge.R' not found in script directory.\nEnsure the directory '$script_dir' contains all required file (see readme).\n";
-			exit(1);
-		}
-
-		unless (-e $script_dir."/FDR.R") {
-			print "Script 'FDR.R' not found in script directory.\nEnsure the script directory '$script_dir' contains all required file (see readme).\n";
-			exit(1);
-		}
-
-		unless (-e $script_dir."/s_curve.R") {
-			print "Script 's_curve.R' not found in script directory.\nEnsure the script directory '$script_dir' contains all required file (see readme).\n";
-			exit(1);
-		}
-
-	} else { 
-		print "Script directory '$script_dir' does NOT exist!\n";
-		exit;
-	}
-} else {
-	print "Please do not forget to pass the scripts directory!\n";
-	exit;
-}
 
 
 printf("%-".$space_len."s", "Total number of mappable reads",);
@@ -187,27 +249,28 @@ print ":$MINCOUNT\n";
 printf("%-".$space_len."s", "Total number of cores used",);
 print ":$cores\n";
 
-
 if (uc($default_score) eq 'Y') {
-
     printf("%-".$space_len."s", "Threshold score used",);
     print ":$cutoff\n";
-
 } else {
-
     printf("%-".$space_len."s", "False discovery rate used",);
     print ":$fdr\n";
-
 }
-
 
 printf("%-".$space_len."s", "Number of iterations to generate negative set ",);
 print ":$no_of_samples\n";
 
 printf("%-".$space_len."s", "Proportion of noise to generate negative set ",);
-print ":$alpha\n";
+print ":$sigma\n";
 
-# Prepare output files
+
+#---- round non integers to integer values
+$mapped_total = ceil($mapped_total);
+$cores = ceil($cores);
+$no_of_samples = ceil($no_of_samples);
+
+
+#----- Prepare output files
 my $gene_file = $work_dir."/".$exp_name."gene_list.txt";
 $transcript_info_file = $work_dir."/".$exp_name."all_transcript.txt";
 $isoform = $work_dir."/".$exp_name."transcript_zeroinfl.txt";
@@ -216,32 +279,31 @@ $threshold = $work_dir."/".$exp_name."thresholds.txt";
 $transcript_threshold = $work_dir."/".$exp_name."transcript_threshold.txt";
 
 
-
-# get all the genes and transcripts in the genome
+#---- get all the genes and transcripts in the genome
 print "\n\n";
 my $msg = "\tExtracting annotation information from GTF file(s).";
 print_localtime($msg);
 my ($genes, $transcripts) = annotation_GTF($gtf);
 
 
-# get read table into memory
+#---- get read table into memory
 $msg = "\tExtracting RPF positional data from file.";
 print_localtime($msg);
 my $reads_count_table = get_read_table($ribo);
 
 
-# assemble transcripot information
+#---- assemble transcripot information
 $msg = "\tAssembling transcript information";
 print_localtime($msg);
 my ($valid_genes,$transcripts_valid) = Isoform_data($genes,$transcripts);
 
 
-# write gene and transcript info to file
+#---- write gene and transcript info to file
 gene_info($valid_genes,$gene_file);
 transcript_info($transcripts_valid,$transcript_info_file);
 
 
-# use S curve to find cutoffs
+#---- use S curve to find cutoffs
 $msg = "\tGenerating S curve thresholds.";
 print_localtime($msg);
 my $scurve_cmd = "Rscript $script_dir"."/s_curve.R $transcript_info_file $threshold $scurve";
@@ -249,20 +311,22 @@ print "\n$scurve_cmd\n";
 system($scurve_cmd);
 
 
-# split transcript into multiple files for multiprocessing
+#---- split transcript into multiple files for multiprocessing
 split_genes_file($transcripts_valid);
 
+
+#---- Peroform zero inflated negative binomial regression
 print "\n\n";
-# Peroform zero inflated negative binomial regression
 $msg = "\tPerforming Zeroinflated negative binomial analysis. This might take a while.";
 print_localtime($msg);
 ZINB_parallel();
 
 
+#--- Estimate FDR and select expressed Isoforms
 print "\n\n";
-# Estimate FDR and select expressed Isoforms
 $msg = "\tIdentifing expressed isoform(s) at $fdr FDR threshold";
 print_localtime($msg);
+
 
 my $merge_cmd = "Rscript $script_dir"."/merge.R $file_dir $isoform result";
 print "\n$merge_cmd\n";
@@ -282,10 +346,9 @@ timer($startRun);
 
 
 
-########################
-#		SUBS
-########################
 
+
+###------------- SUBROUTINES -------------###
 
 sub ZINB_parallel {
 	my $pm = Parallel::ForkManager->new($cores);
@@ -295,7 +358,7 @@ sub ZINB_parallel {
 		my $pid = $pm->start and next;	# parallel process access to split directory
 		unless ($file=~/^\./){
 			my $file_in = path($file, $file_dir);
-			system("Rscript $script_dir"."/RiboZINB.R ".$tmp_dir." ".$file_in." ".$file_in."_zinb ".$threshold." ".$no_of_samples." ".$alpha." ".$default_score);
+			system("Rscript $script_dir"."/RiboZINB.R ".$tmp_dir." ".$file_in." ".$file_in."_zinb ".$threshold." ".$no_of_samples." ".$sigma." ".$default_score);
 		}
 		$pm->finish; 
 	}
@@ -309,7 +372,7 @@ sub split_genes_file {
 	my $transcripts = $_[0];
 
 	my $number_gene = scalar(keys %$transcripts);
-	my $genes_per_file = int(($number_gene/$cores) + 0.5);	# number of genes in each file
+	my $genes_per_file = ceil($number_gene/$cores);	# number of genes in each file
 	my $fcount = 1;		# Count number of files
 	my $countgenes = 1;		# Exit count
 
@@ -318,7 +381,8 @@ sub split_genes_file {
 	print F "gene\tgene_name\ttranscript\tstrand\tCCDS\tCCDS_ID\tbiotype\ttsl\tlength_tr\trpkm_tr\tlength_cds\tcoverage_cds\trpkm_cds\treads\n";
 
 	foreach my $gene (keys %$transcripts) {
-		if ($countgenes % $genes_per_file == 0) {
+		#if ($countgenes % $genes_per_file == 0) {
+		if ($countgenes == $genes_per_file) {
 			close F;
 			$fcount++;
 			my $file = $file_dir."/split_".$fcount;
@@ -784,6 +848,16 @@ sub check_work_dir {
 	return $work_dir, $file_dir, $tmp_dir;
 }
 
+
+sub _isNumeric {
+    # check if variable is numeric
+    my ($value) = @_; 
+
+    no warnings;
+
+    return 1 if ($value + 0) eq $value;
+    return 0;
+}
 
 sub timer {
 	my $startRun = shift;

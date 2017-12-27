@@ -34,10 +34,10 @@ USAGE: perl ./RiboZINB.pl -p positional_data_file -g gtf_file -s script_dir -r t
 
 
 Mandatory input variables
-	-p	RIBO-seq positional data in comma delimited format [chromosome,strand,start,count]	
-	-g	annoation in gtf format
-	-s	script directory
-	-r	total number of mappable reads
+	<p>-p	RIBO-seq positional data in comma delimited format [chromosome,strand,start,count]</p>
+	<p>-g	annoation in gtf format</p>
+	<p>-s	script directory</p>
+	<p>-r	total number of mappable reads</p>
 
 
 Optional input variables

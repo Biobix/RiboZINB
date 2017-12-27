@@ -31,13 +31,13 @@ RiboZINB does not rerquire any special installation requirements. To install Rib
 
 USAGE: perl ./RiboZINB.pl -p positional_data_file -g gtf_file -s script_dir -r total_mappable_reads  
 
-Mandatory input variables  
+Mandatory input parameters  
 	-p	RIBO-seq positional data in comma delimited format [chromosome,strand,start,count]  
 	-g	annoation in gtf format  
 	-s	script directory  
 	-r	total number of mappable reads  
 
-Optional input variables  
+Optional input parameters  
 	-e	experiment name  
 	-w	work directory  
 	-m	minimum reads count  

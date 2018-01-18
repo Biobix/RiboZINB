@@ -381,8 +381,7 @@ sub split_genes_file {
 	print F "gene\tgene_name\ttranscript\tstrand\tCCDS\tCCDS_ID\tbiotype\ttsl\tlength_tr\trpkm_tr\tlength_cds\tcoverage_cds\trpkm_cds\treads\n";
 
 	foreach my $gene (keys %$transcripts) {
-		#if ($countgenes % $genes_per_file == 0) {
-		if ($countgenes == $genes_per_file) {
+		if ($countgenes % $genes_per_file == 0) {
 			close F;
 			$fcount++;
 			my $file = $file_dir."/split_".$fcount;

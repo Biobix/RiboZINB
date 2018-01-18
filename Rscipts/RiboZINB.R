@@ -70,8 +70,8 @@ transcript.dta <- transcript.dta[which(transcript.dta$gene %in% transcript.thres
 # new variables to update
 transcript.dta$rate_ratio <- vector(length = nrow(transcript.dta))
 transcript.dta$odds_ratio <- vector(length = nrow(transcript.dta))
-transcript.dta$score <- vector(length = nrow(transcript.dta))
-transcript.dta$score_neg <- vector(length = nrow(transcript.dta))
+transcript.dta$RPSS <- vector(length = nrow(transcript.dta))
+transcript.dta$RPSS_neg <- vector(length = nrow(transcript.dta))
 transcript.dta$LCI_count <- vector(length = nrow(transcript.dta))
 transcript.dta$UCI_count <- vector(length = nrow(transcript.dta))
 transcript.dta$LCI_zero <- vector(length = nrow(transcript.dta))
@@ -124,9 +124,9 @@ for (t in 1:nrow(transcript.dta)) {
         transcript.dta[t,]$rate_ratio <- rate_ratio
         transcript.dta[t,]$odds_ratio <- odds_ratio
 
-		# score
+		# RPSS
         x <- c(1 - rate_ratio, 1 - odds_ratio)
-		transcript.dta[t,]$score <- sqrt(sum(x^2))
+		transcript.dta[t,]$RPSS <- sqrt(sum(x^2))
 
 		# P value
 		transcript.dta[t,]$pvalues_count <- summary(zinb)$coefficients$count[2,4]
@@ -139,7 +139,7 @@ for (t in 1:nrow(transcript.dta)) {
 		transcript.dta[t,]$UCI_zero <- exp(confint(zinb)[4,2])
 
         # Permutation test
-	    score_neg.samp <- vector()
+	    RPSS_neg.samp <- vector()
 	    for (i in 1:no_of_samples) {
 
             # Simulated distribution
@@ -161,26 +161,26 @@ for (t in 1:nrow(transcript.dta)) {
 			    odds_ratio_neg <- exp(coef(zinb_neg)[4])
 
                 x.neg <- c(1 -rate_ratio_neg, 1 - odds_ratio_neg)
-                score_neg.samp[i] <- sqrt(sum(x.neg^2))
+                RPSS_neg.samp[i] <- sqrt(sum(x.neg^2))
 
                 rm(rate_ratio_neg)
                 rm(odds_ratio_neg)
                 rm(x.neg)
 		    } else {
-                score_neg.samp[i] <- 'NA'
+                RPSS_neg.samp[i] <- 'NA'
             }
 	    }
 
         # write permutation estimates to file
-        #permutations[[colnames(gene)[j]]] <- score_neg.samp
-		transcript.dta[t,]$score_neg <- mean(score_neg.samp, na.rm =T)
+        #permutations[[colnames(gene)[j]]] <- RPSS_neg.samp
+		transcript.dta[t,]$RPSS_neg <- mean(RPSS_neg.samp, na.rm =T)
         
         rm(rate_ratio)
         rm(odds_ratio)
 
 	} else {
 
-		transcript.dta[t,]$score  <- NA
+		transcript.dta[t,]$RPSS  <- NA
 		transcript.dta[t,]$pvalues_count <- NA
 		transcript.dta[t,]$pvalues_zero <- NA
 		transcript.dta[t,]$LCI_count <- NA
@@ -189,7 +189,7 @@ for (t in 1:nrow(transcript.dta)) {
 		transcript.dta[t,]$UCI_zero <- NA
         transcript.dta[t,]$rate_ratio  <- NA
         transcript.dta[t,]$odds_ratio <- NA
-        transcript.dta[t,]$score_neg <- NA
+        transcript.dta[t,]$RPSS_neg <- NA
 	}
 
 }

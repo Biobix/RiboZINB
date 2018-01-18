@@ -70,8 +70,8 @@ transcript.dta <- transcript.dta[which(transcript.dta$gene %in% transcript.thres
 # new variables to update
 transcript.dta$rate_ratio <- vector(length = nrow(transcript.dta))
 transcript.dta$odds_ratio <- vector(length = nrow(transcript.dta))
-transcript.dta$score <- vector(length = nrow(transcript.dta))
-transcript.dta$score_neg <- vector(length = nrow(transcript.dta))
+transcript.dta$RPSS <- vector(length = nrow(transcript.dta))
+transcript.dta$RPSS_neg <- vector(length = nrow(transcript.dta))
 transcript.dta$LCI_count <- vector(length = nrow(transcript.dta))
 transcript.dta$UCI_count <- vector(length = nrow(transcript.dta))
 transcript.dta$LCI_zero <- vector(length = nrow(transcript.dta))
@@ -91,14 +91,6 @@ for (t in 1:nrow(transcript.dta)) {
 	j <- which(transcript.dta[t,]$transcript == colnames(gene)) # get column number of transcript at row t
 	tr.df <- data.frame(count=gene[,j], group='0')
     count_values <- gene[,1]
-
-    # adjust for spikes/pause sites by replacing positions with reads > 70% with average
-    #average_reads <- round(0.5 + sum(count_values)/length(count_values[count_values > 0]), digits=0)
-    #pause_site_threshold <- pause_threshold*sum(count_values)       # threshold for pause sites
-
-    # replace pause sites with average reads
-    #gene.f$count[gene.f$count >= pause_site_threshold] <- average_reads
-    #tr.df$count[tr.df$count >= pause_site_threshold] <- average_reads
 
     # inflate zero if needed uninflated zeros occurs mostly within histon genes
     proportion_of_count <- length(count_values[count_values > 0])/length(count_values)
@@ -124,9 +116,9 @@ for (t in 1:nrow(transcript.dta)) {
         transcript.dta[t,]$rate_ratio <- rate_ratio
         transcript.dta[t,]$odds_ratio <- odds_ratio
 
-		# score
+		# RPSS
         x <- c(1 - rate_ratio, 1 - odds_ratio)
-		transcript.dta[t,]$score <- sqrt(sum(x^2))
+		transcript.dta[t,]$RPSS <- sqrt(sum(x^2))
 
 		# P value
 		transcript.dta[t,]$pvalues_count <- summary(zinb)$coefficients$count[2,4]
@@ -139,7 +131,7 @@ for (t in 1:nrow(transcript.dta)) {
 		transcript.dta[t,]$UCI_zero <- exp(confint(zinb)[4,2])
 
         # Permutation test
-	    score_neg.samp <- vector()
+	    RPSS_neg.samp <- vector()
 	    for (i in 1:no_of_samples) {
 
             # Simulated distribution
@@ -161,26 +153,25 @@ for (t in 1:nrow(transcript.dta)) {
 			    odds_ratio_neg <- exp(coef(zinb_neg)[4])
 
                 x.neg <- c(1 -rate_ratio_neg, 1 - odds_ratio_neg)
-                score_neg.samp[i] <- sqrt(sum(x.neg^2))
+                RPSS_neg.samp[i] <- sqrt(sum(x.neg^2))
 
                 rm(rate_ratio_neg)
                 rm(odds_ratio_neg)
                 rm(x.neg)
 		    } else {
-                score_neg.samp[i] <- 'NA'
+                RPSS_neg.samp[i] <- 'NA'
             }
 	    }
 
         # write permutation estimates to file
-        #permutations[[colnames(gene)[j]]] <- score_neg.samp
-		transcript.dta[t,]$score_neg <- mean(score_neg.samp, na.rm =T)
+		transcript.dta[t,]$RPSS_neg <- mean(RPSS_neg.samp, na.rm =T)
         
         rm(rate_ratio)
         rm(odds_ratio)
 
 	} else {
 
-		transcript.dta[t,]$score  <- NA
+		transcript.dta[t,]$RPSS  <- NA
 		transcript.dta[t,]$pvalues_count <- NA
 		transcript.dta[t,]$pvalues_zero <- NA
 		transcript.dta[t,]$LCI_count <- NA
@@ -189,23 +180,11 @@ for (t in 1:nrow(transcript.dta)) {
 		transcript.dta[t,]$UCI_zero <- NA
         transcript.dta[t,]$rate_ratio  <- NA
         transcript.dta[t,]$odds_ratio <- NA
-        transcript.dta[t,]$score_neg <- NA
+        transcript.dta[t,]$RPSS_neg <- NA
 	}
 
 }
 
 write.table(transcript.dta, file=paste(result_file, "_result", sep=""), sep = "\t",col.names=T,row.names=F, quote = FALSE)
-
-
-# Write permutation list to file
-#dataset.perm <- c()
-#for (i in 1:length(permutations)) {
-#    row <- c(names(permutations)[i], permutations[[i]])
-#    dataset.perm <- rbind(dataset.perm, row)
-#}
-#dataset.perm <-as.data.frame(dataset.perm)
-#colnames(dataset.perm) <- c("transcript", paste("perm_", c(1:no_of_samples),sep=""))
-#write.table(dataset.perm, file=paste(result_file, "_perm", sep=""), sep="\t", row.names = FALSE, col.names = FALSE, quote = FALSE)
-
 
 

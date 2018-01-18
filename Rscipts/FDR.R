@@ -22,44 +22,43 @@ transcripts <- read.table(file=transcript_file,sep='\t',h=T, quote="")
 # check if cutoff is estimated
 if (default == 'y'){
 
-    transcripts.FDR <- transcripts[which(transcripts$score <= cutoff),]
+    transcripts.FDR <- transcripts[which(transcripts$RPSS <= cutoff),]
 
 } else if (default == 'n') {
 
-    scores_pos <- na.omit(unique(sort(transcripts$score, decreasing = FALSE)))
-    scores_neg <- na.omit(unique(sort(transcripts$score_neg, decreasing = FALSE)))
-    scores <- scores_pos
-    fdr_score <- vector()
-    for (i in 1:length(scores)) {
-        score.sel <- scores[i]
-	    A <- length(scores_pos[scores_pos <= score.sel])
-	    B <- length(scores_neg[scores_neg <= score.sel])
-	    fdr_score[i] <- B/(A + B)
+    RPSS_pos <- na.omit(unique(sort(transcripts$RPSS, decreasing = FALSE)))
+    RPSS_neg <- na.omit(unique(sort(transcripts$RPSS_neg, decreasing = FALSE)))
+    RPSS <- RPSS_pos
+    fdr_RPSS <- vector()
+    for (i in 1:length(RPSS)) {
+        RPSS.sel <- RPSS[i]
+	    A <- length(RPSS_pos[RPSS_pos <= RPSS.sel])
+	    B <- length(RPSS_neg[RPSS_neg <= RPSS.sel])
+	    fdr_RPSS[i] <- B/(A + B)
     }
 
-    FDR_score <- data.frame(score=scores,fdr=fdr_score)
-    cutoff <- max(FDR_score[which(FDR_score$fdr <= fdr),]$score)
+    FDR_RPSS <- data.frame(RPSS=RPSS,fdr=fdr_RPSS)
+    cutoff <- max(FDR_RPSS[which(FDR_RPSS$fdr <= fdr),]$RPSS)
 
     cutoff <- round(cutoff + 0.005, digits=2)    # round-up to the nearest 3rd decimal
 
-    transcripts.FDR <- transcripts[which(transcripts$score <= cutoff),]
+    transcripts.FDR <- transcripts[which(transcripts$RPSS <= cutoff),]
 
-    # plot positive and negative score distribution
+    # plot positive and negative RPSS distribution
     xlim <- 5
     pdf(file=paste(prefix,"distributions.pdf",sep="_"), width=10, useDingbats=FALSE)
     ax <- 30
-    dta.score <- data.frame(scores = c(scores_pos,scores_neg), Distribution=c(rep("Observed RPSS",length(scores_pos)),rep("Empirical RPSS",length(scores_neg)))) 
-    print(ggplot(dta.score, aes(x = scores, fill = Distribution)) + geom_density(alpha = 0.5, na.rm=T)  + theme_bw(base_size=ax) + theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black")) + xlim(0, xlim)  + theme(legend.position = c(0.5, 0.8), text = element_text(size=ax), legend.key.size = unit(1, "cm"),legend.title.align=1, axis.text.y = element_text(angle = 90, vjust=0, hjust=0.5), axis.title = element_text(colour = "black")))
+    dta.RPSS <- data.frame(RPSS = c(RPSS_pos,RPSS_neg), Distribution=c(rep("Observed RPSS",length(RPSS_pos)),rep("Empirical RPSS",length(RPSS_neg)))) 
+    print(ggplot(dta.RPSS, aes(x = RPSS, fill = Distribution)) + geom_density(alpha = 0.5, na.rm=T)  + theme_bw(base_size=ax) + theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black")) + xlim(0, xlim)  + theme(legend.position = c(0.5, 0.8), text = element_text(size=ax), legend.key.size = unit(1, "cm"),legend.title.align=1, axis.text.y = element_text(angle = 90, vjust=0, hjust=0.5), axis.title = element_text(colour = "black")))
     invisible(dev.off())
 }
 
-transcripts.FDR <- transcripts[which(transcripts$score <= cutoff),]
-transcripts.FDR$isoform_above_cutoff <- "Y"
+transcripts.FDR <- transcripts[which(transcripts$RPSS <= cutoff),]
 
 cat("\nTotal number of genes expressed", length(unique(transcripts$gene)), sep=" ", "\n")
 cat("Total number of transcripts", length(unique(transcripts$transcript)), sep=" ", "\n")
 
-cat("\nThreshold score", cutoff, sep=" ", "\n")
+cat("\nThreshold RPSS", cutoff, sep=" ", "\n")
 cat("Number of genes below threshold", length(unique(transcripts.FDR$gene)), sep=" ", "\n")
 cat("Number of trancript below", length(unique(transcripts.FDR$transcript)), sep=" ", "\n")
 
@@ -87,7 +86,7 @@ gene_no_tr_below_cutoff <- setdiff(transcripts$gene,transcripts.FDR$gene)
 cat("Number of genes without any isoforms below threshold ", length(gene_no_tr_below_cutoff), sep="", "\n")
 
 
-# write outputto file
+# write output to file
 expressed_file <- paste(prefix,"expressed_isoforms.txt",sep="_")
 write.table(transcripts.FDR, file=expressed_file, sep = "\t",col.names=T,row.names=F, quote = FALSE)
 

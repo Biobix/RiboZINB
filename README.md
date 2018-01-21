@@ -50,7 +50,15 @@ Optional input parameters
     -a	multiplier to adjust for noise  
 
 
+Output files  
+	*_gene_list.txt	this file contains the list of all protein coding genes evaluated in the analysis  
+	*_all_transcript.txt File consisting of all protein coding transcripts from the genes in *_gene_list.txt  
+	*_transcript_zeroinfl.txt	file consisting of transcripts from _all_transcript.txt that pass the S-curve thresholds alongside their RiboZinB scores and P-values  
+	*_Ribo_expressed_isoform.txt consist of the list of transcripts/isoforms predicted by the RiboZinB algorithm i.e. transcripts that fall below the FDR threshold  
+	*_Ribo_distribution.pdf	plot of the empirical and observed distributions of the RPSS scores  
+	*_scurve.pdf	plot of the fitted s-curve model overlay of on the longest CCDS (canonical isoform) and the log RPKM and CDS coverage thresholds  
 
+	
 # More information  
 For more information about RiboZINB contact: elvis.ndah@gmail.com or Gerben.Menschaert@UGent.be
 

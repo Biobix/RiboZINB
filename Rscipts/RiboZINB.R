@@ -157,10 +157,10 @@ for (t in 1:nrow(transcript.dta)) {
 			    rate_ratio_neg <- exp(coef(zinb_neg)[2])
 			    odds_ratio_neg <- exp(coef(zinb_neg)[4])
 				
-				pdf <- mean(dlogis(predict(zinb)))
-				marginal.effects.neg <- pdf*coef(zinb)
+                pdf.neg <- mean(dlogis(predict(zinb)))
+                marginal.effects.neg <- pdf.neg*coef(zinb)
 				
-				x.neg <- c(1-exp(marginal.effects.neg[2]), 1-exp(marginal.effects.neg[4]))
+                x.neg <- c(1-exp(marginal.effects.neg[2]), 1-exp(marginal.effects.neg[4]))
                 #x.neg <- c(1 -rate_ratio_neg, 1 - odds_ratio_neg)
 				
                 RPSS_neg.samp[i] <- sqrt(sum(x.neg^2))

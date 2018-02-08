@@ -115,9 +115,14 @@ for (t in 1:nrow(transcript.dta)) {
 
         transcript.dta[t,]$rate_ratio <- rate_ratio
         transcript.dta[t,]$odds_ratio <- odds_ratio
-
+		
+		# marginal effects on the rate ratio
+		pdf <- mean(dlogis(predict(zinb)))
+		marginal.effects <- pdf*coef(zinb)
+		
 		# RPSS
-        x <- c(1 - rate_ratio, 1 - odds_ratio)
+		x <- c(1-exp(marginal.effects[2]), 1-exp(marginal.effects[4]))
+        #x <- c(1 - rate_ratio, 1 - odds_ratio)
 		transcript.dta[t,]$RPSS <- sqrt(sum(x^2))
 
 		# P value
@@ -151,10 +156,15 @@ for (t in 1:nrow(transcript.dta)) {
 
 			    rate_ratio_neg <- exp(coef(zinb_neg)[2])
 			    odds_ratio_neg <- exp(coef(zinb_neg)[4])
-
-                x.neg <- c(1 -rate_ratio_neg, 1 - odds_ratio_neg)
+				
+				pdf <- mean(dlogis(predict(zinb)))
+				marginal.effects.neg <- pdf*coef(zinb)
+				
+				x.neg <- c(1-exp(marginal.effects.neg[2]), 1-exp(marginal.effects.neg[4]))
+                #x.neg <- c(1 -rate_ratio_neg, 1 - odds_ratio_neg)
+				
                 RPSS_neg.samp[i] <- sqrt(sum(x.neg^2))
-
+				
                 rm(rate_ratio_neg)
                 rm(odds_ratio_neg)
                 rm(x.neg)

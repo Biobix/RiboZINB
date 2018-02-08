@@ -60,7 +60,7 @@ cat("Total number of transcripts", length(unique(transcripts$transcript)), sep="
 
 cat("\nThreshold RPSS", cutoff, sep=" ", "\n")
 cat("Number of genes below threshold", length(unique(transcripts.FDR$gene)), sep=" ", "\n")
-cat("Number of trancript below", length(unique(transcripts.FDR$transcript)), sep=" ", "\n")
+cat("Number of trancript below threshold", length(unique(transcripts.FDR$transcript)), sep=" ", "\n")
 
 selected_genes <- as.vector(unique(transcripts.FDR$gene))
 genes_single <- character()
@@ -82,7 +82,7 @@ cat("Number of genes with single isoform ", length(genes_single), sep=" ", "\n")
 cat("Number of genes with multiple isoform ", length(genes_multi), sep="", "\n")
 
 # add best scoring isoform for all those below cutoff
-gene_no_tr_below_cutoff <- setdiff(transcripts$gene,transcripts.FDR$gene)
+gene_no_tr_below_cutoff <- unique(setdiff(transcripts$gene,transcripts.FDR$gene))
 cat("Number of genes without any isoforms below threshold ", length(gene_no_tr_below_cutoff), sep="", "\n")
 
 
